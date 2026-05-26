@@ -52,7 +52,7 @@ function App() {
     try {
 
       const response = await axios.post(
-        "http://127.0.0.1:8000/detect",
+        "https://bananasense-backend.onrender.com/detect",
         formData
       );
 
