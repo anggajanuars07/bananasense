@@ -1,12 +1,20 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
+from PIL import Image
 import shutil
 import os
 
+# =========================
+# FASTAPI
+# =========================
+
 app = FastAPI()
 
-# Allow React frontend
+# =========================
+# CORS FIX
+# =========================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,45 +23,103 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load YOLO Model
+# =========================
+# LOAD YOLO MODEL
+# =========================
+
 model = YOLO("yolov8n.pt")
+
+# =========================
+# TEMP FOLDER
+# =========================
+
+TEMP_FOLDER = "temp"
+
+os.makedirs(TEMP_FOLDER, exist_ok=True)
+
+# =========================
+# ROOT TEST
+# =========================
 
 @app.get("/")
 def home():
+
     return {
-        "message": "BananaSense AI Running 🍌"
+        "message": "BananaSense Backend Running 🍌"
     }
+
+# =========================
+# DETECT API
+# =========================
 
 @app.post("/detect")
 async def detect(file: UploadFile = File(...)):
 
-    # Save uploaded image
-    os.makedirs("temp", exist_ok=True)
+    try:
 
-    file_path = f"temp/{file.filename}"
+        # Save uploaded image
+        file_path = os.path.join(
+            TEMP_FOLDER,
+            file.filename
+        )
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        with open(file_path, "wb") as buffer:
 
-    # Run detection
-    results = model(file_path)
+            shutil.copyfileobj(
+                file.file,
+                buffer
+            )
 
-    detected = []
+        # YOLO prediction
+        results = model(file_path)
 
-    for r in results:
-        for box in r.boxes:
+        detections = []
 
-            class_id = int(box.cls[0])
+        # Read YOLO results
+        for result in results:
 
-            confidence = float(box.conf[0])
+            boxes = result.boxes
 
-            label = model.names[class_id]
+            for box in boxes:
 
-            detected.append({
-                "label": label,
-                "confidence": round(confidence * 100, 2)
-            })
+                confidence = float(
+                    box.conf[0] * 100
+                )
 
-    return {
-        "detections": detected
-    }
+                class_id = int(
+                    box.cls[0]
+                )
+
+                class_name = model.names[
+                    class_id
+                ]
+
+                # Only banana
+                if class_name == "banana":
+
+                    detections.append({
+
+                        "class": class_name,
+
+                        "confidence":
+                            round(confidence, 2)
+
+                    })
+
+        return {
+
+            "success": True,
+
+            "detections": detections
+
+        }
+
+    except Exception as e:
+
+        return {
+
+            "success": False,
+
+            "error": str(e)
+
+        }
